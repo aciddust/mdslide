@@ -1,0 +1,50 @@
+name: Deploy Windows MSI/EXE, MSIX App
+
+on:
+  push:
+    # branches:
+    #   - main
+    # Publish `1.2.3` tags as releases.
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        target: [x86_64-pc-windows-msvc, aarch64-pc-windows-msvc]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Rust target and Tauri bundle
+        run: |
+          cd src-tauri
+          cargo build --release --target ${{ matrix.target }}
+          npm run tauri build
+        env:
+          TAURI_PLATFORM: windows
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.target }}
+          path: |
+            src-tauri/target/release/bundle/**/*.msi
+            src-tauri/target/release/bundle/**/*.msix
+            src-tauri/target/release/bundle/**/*.exe

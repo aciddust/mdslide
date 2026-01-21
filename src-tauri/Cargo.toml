@@ -1,0 +1,37 @@
+[package]
+name = "mdslide"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+description = "Markdown-based slide presentation tool"
+repository = "https://github.com/aciddust/mdslide"
+homepage = "https://github.com/aciddust/mdslide"
+documentation = "https://docs.rs/mdslide"
+keywords = ["markdown", "editor", "slideshow"]
+rust-version = "1.77.2"
+authors = ["aciddust"]
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.4.1", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.8.5", features = ["protocol-asset"] }
+tauri-plugin-log = "2"
+tauri-plugin-dialog = "2.6.0"
+tauri-plugin-fs = "2.4.5"
+dirs = "5.0"
+font-kit = "0.14"
+
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+
+[target.i686-pc-windows-gnu]
+linker = "i686-w64-mingw32-gcc"
