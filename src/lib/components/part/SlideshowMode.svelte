@@ -7,13 +7,6 @@
 	export let onNextSlide: () => void;
 </script>
 
-<svelte:window
-	on:keydown={(e) => {
-		if (e.key === 'ArrowLeft') onPrevSlide();
-		if (e.key === 'ArrowRight') onNextSlide();
-	}}
-/>
-
 <div class="fixed inset-0 z-50 flex flex-col bg-black">
 	<!-- 슬라이드쇼 컨트롤 바 -->
 	<div class="absolute top-4 right-4 z-10 flex gap-2">
