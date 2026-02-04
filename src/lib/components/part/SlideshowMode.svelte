@@ -1,10 +1,23 @@
 <script lang="ts">
+	import { afterUpdate } from 'svelte';
+
 	export let slides: string[] = [];
 	export let selectedSlideIndex = 0;
 	export let renderMarkdown: (md: string) => string;
 	export let onClose: () => void;
 	export let onPrevSlide: () => void;
 	export let onNextSlide: () => void;
+
+	let slideContentContainer: HTMLElement;
+	let previousSlideIndex = selectedSlideIndex;
+
+	// 슬라이드 인덱스가 변경될 때 스크롤을 맨 위로 초기화
+	afterUpdate(() => {
+		if (previousSlideIndex !== selectedSlideIndex && slideContentContainer) {
+			slideContentContainer.scrollTop = 0;
+			previousSlideIndex = selectedSlideIndex;
+		}
+	});
 </script>
 
 <div class="fixed inset-0 z-50 flex flex-col bg-black">
@@ -49,6 +62,7 @@
 	<!-- 슬라이드 컨텐츠 -->
 	<div class="flex flex-1 items-center justify-center p-8">
 		<div
+			bind:this={slideContentContainer}
 			class="max-h-[85vh] w-full max-w-[1400px] overflow-y-auto rounded-lg bg-white px-20 py-16 shadow-2xl"
 			style="font-size: clamp(16px, 1.4vw, 24px); line-height: 1.8;"
 		>
