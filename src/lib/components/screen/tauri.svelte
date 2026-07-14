@@ -162,6 +162,13 @@
 
 	// 단축키 처리
 	function handleKeydown(event: KeyboardEvent) {
+		// macOS WKWebView에서 한글 등 CJK IME가 활성화된 상태로 방향키를 누르면
+		// IME가 합성한 keydown이 한 번 더 발생해 슬라이드가 2장씩 넘어간다.
+		// 합성된 중복 이벤트(isComposing 또는 keyCode 229)는 무시한다.
+		if (event.isComposing || event.keyCode === 229) {
+			return;
+		}
+
 		// Cmd/Ctrl + B: 굵게
 		if ((event.metaKey || event.ctrlKey) && event.key === 'b') {
 			event.preventDefault();

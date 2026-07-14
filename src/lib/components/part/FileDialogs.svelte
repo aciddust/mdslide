@@ -14,6 +14,12 @@
 	export let onDeleteConfirm: () => void;
 	export let onNewFileConfirm: () => void;
 	export let onNewDirConfirm: () => void;
+
+	// 한글 등 CJK IME 조합 중에는 WebKit이 합성한 keydown이 한 번 더 발생하므로
+	// (isComposing 또는 keyCode 229), Enter 확정이 중복 실행되지 않도록 걸러낸다
+	function isImeComposingEvent(e: KeyboardEvent) {
+		return e.isComposing || e.keyCode === 229;
+	}
 </script>
 
 <!-- 이름 변경 다이얼로그 -->
@@ -40,7 +46,7 @@
 				class="mb-4 w-full rounded-md border border-border bg-background px-3 py-2 text-foreground"
 				placeholder="새 이름 입력"
 				on:keydown={(e) => {
-					if (e.key === 'Enter') onRenameConfirm();
+					if (e.key === 'Enter' && !isImeComposingEvent(e)) onRenameConfirm();
 				}}
 			/>
 			<div class="flex justify-end gap-2">
@@ -135,7 +141,7 @@
 				class="mb-4 w-full rounded-md border border-border bg-background px-3 py-2 text-foreground"
 				placeholder="파일 이름 입력"
 				on:keydown={(e) => {
-					if (e.key === 'Enter') onNewFileConfirm();
+					if (e.key === 'Enter' && !isImeComposingEvent(e)) onNewFileConfirm();
 				}}
 			/>
 			<div class="flex justify-end gap-2">
@@ -180,7 +186,7 @@
 				class="mb-4 w-full rounded-md border border-border bg-background px-3 py-2 text-foreground"
 				placeholder="디렉터리 이름 입력"
 				on:keydown={(e) => {
-					if (e.key === 'Enter') onNewDirConfirm();
+					if (e.key === 'Enter' && !isImeComposingEvent(e)) onNewDirConfirm();
 				}}
 			/>
 			<div class="flex justify-end gap-2">
