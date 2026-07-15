@@ -3,9 +3,16 @@ import DOMPurify from 'dompurify';
 import { readFile, writeTextFile, writeFile } from '@tauri-apps/plugin-fs';
 import { splitIntoSlides } from './markdownService';
 import { saveHtmlFile, savePdfFile } from './fileService';
-import { getFileName, getFileNameWithoutExtension } from './utils';
+import { getFileNameWithoutExtension } from './utils';
 
 export type ReadBinaryFn = (path: string) => Promise<Uint8Array>;
+
+/**
+ * Windows(\) 와 POSIX(/) 경로 구분자 모두 지원
+ */
+function lastSeparatorIndex(path: string): number {
+	return Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+}
 
 export interface RenderedSlides {
 	slidesHtml: string[];
@@ -56,7 +63,7 @@ async function embedImages(
 			if (!mime) throw new Error(`unsupported extension: ${ext}`);
 			const bytes = await readBinary(absolutePath);
 			const dataUri = `data:${mime};base64,${toBase64(bytes)}`;
-			result = result.replace(full, `<img${attrs}src="${dataUri}"`);
+			result = result.replace(full, () => `<img${attrs}src="${dataUri}"`);
 		} catch (error) {
 			console.error('이미지 임베드 실패:', absolutePath, error);
 			failedImages.push(src);
@@ -74,7 +81,7 @@ export async function renderSlidesForExport(
 	filePath: string | null,
 	readBinary: ReadBinaryFn = readFile
 ): Promise<RenderedSlides> {
-	const fileDir = filePath ? filePath.substring(0, filePath.lastIndexOf('/')) : '';
+	const fileDir = filePath ? filePath.substring(0, lastSeparatorIndex(filePath)) : '';
 	const failedImages: string[] = [];
 	const slidesHtml: string[] = [];
 
@@ -162,7 +169,7 @@ const VIEWER_JS = `
 			else if (e.key === 'End') { e.preventDefault(); show(slides.length - 1); }
 			else if (e.key === 'f' || e.key === 'F') {
 				if (document.fullscreenElement) { document.exitFullscreen(); }
-				else { document.documentElement.requestFullscreen(); }
+				else { document.documentElement.requestFullscreen().catch(function () {}); }
 			}
 		});
 		prevBtn.addEventListener('click', function () { show(current - 1); });
@@ -210,10 +217,9 @@ export interface ExportOutcome {
  * standalone HTML로 내보내기. 저장 취소 시 { saved: false }
  */
 export async function exportToHtml(markdown: string, filePath: string): Promise<ExportOutcome> {
-	const fileName = filePath.substring(filePath.lastIndexOf('/') + 1);
-	const baseName = fileName.includes('.')
-		? fileName.substring(0, fileName.lastIndexOf('.'))
-		: fileName;
+	const baseName = getFileNameWithoutExtension(
+		filePath.substring(lastSeparatorIndex(filePath) + 1)
+	);
 
 	const savePath = await saveHtmlFile(`${baseName}.html`);
 	if (!savePath) return { saved: false, failedImages: [] };
@@ -251,7 +257,9 @@ export async function exportToPdf(
 	markdown: string,
 	filePath: string
 ): Promise<{ saved: boolean; failedImages: string[]; overflowSlides: number[] }> {
-	const baseName = getFileNameWithoutExtension(getFileName(filePath));
+	const baseName = getFileNameWithoutExtension(
+		filePath.substring(lastSeparatorIndex(filePath) + 1)
+	);
 
 	const savePath = await savePdfFile(`${baseName}.pdf`);
 	if (!savePath) return { saved: false, failedImages: [], overflowSlides: [] };
@@ -261,7 +269,7 @@ export async function exportToPdf(
 	// 오프스크린 렌더 컨테이너 (화면 밖 배치 — 레이아웃은 계산되지만 보이지 않음)
 	const container = document.createElement('div');
 	container.style.cssText =
-		'position: fixed; left: 0; top: 0; z-index: -1000; opacity: 0; pointer-events: none;';
+		'position: fixed; left: 0; top: 0; z-index: -1000; pointer-events: none;';
 	const style = document.createElement('style');
 	style.textContent = PDF_STYLES;
 	container.appendChild(style);
@@ -295,6 +303,9 @@ export async function exportToPdf(
 				useCORS: true,
 				logging: false,
 				windowWidth: 1280,
+				width: 1280,
+				height: 720 * slidesHtml.length,
+				windowHeight: 720 * slidesHtml.length,
 				onclone: (doc: Document) => {
 					doc.querySelectorAll('link[rel="stylesheet"], style').forEach((el) => el.remove());
 					const s = doc.createElement('style');
