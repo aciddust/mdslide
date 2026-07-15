@@ -30,16 +30,24 @@
 	export let onTableGridHover: (rows: number, cols: number) => void;
 	export let onImageInsert: () => void;
 	export let onSave: () => void;
+	export let onExportHtml: () => void;
 	export let onExportPdf: () => void;
 	export let onSlideshowToggle: () => void;
 	export let onPreviewToggle: () => void;
 	export let onAddSlide: () => void;
+
+	let showExportMenu = false;
 
 	function handleKeydown(event: KeyboardEvent) {
 		if (showTableGrid && event.key === 'Escape') {
 			event.preventDefault();
 			event.stopPropagation();
 			onTableToggle();
+		}
+		if (showExportMenu && event.key === 'Escape') {
+			event.preventDefault();
+			event.stopPropagation();
+			showExportMenu = false;
 		}
 	}
 </script>
@@ -161,6 +169,53 @@
 	</div>
 	<div class="flex-1"></div>
 	<div class="mx-1 h-6 w-px bg-border"></div>
+	<div class="relative">
+		<button
+			class="inline-flex h-8 w-8 items-center justify-center rounded-md text-sm font-medium transition-colors {showExportMenu
+				? 'bg-accent'
+				: ''} {hasSlides
+				? 'hover:bg-accent hover:text-accent-foreground'
+				: 'cursor-not-allowed opacity-50'}"
+			on:click={hasSlides ? () => (showExportMenu = !showExportMenu) : undefined}
+			disabled={!hasSlides}
+			data-tooltip="내보내기"
+			data-tooltip-position="left"
+		>
+			<FileDown class="h-4 w-4" />
+		</button>
+		{#if showExportMenu}
+			<div
+				class="fixed inset-0 z-40"
+				on:click={() => (showExportMenu = false)}
+				role="button"
+				tabindex="-1"
+				on:keydown={() => {}}
+				aria-label="닫기"
+			></div>
+			<div
+				class="absolute top-full right-0 z-50 mt-2 w-44 rounded-md border border-border bg-popover p-1 shadow-lg"
+			>
+				<button
+					class="w-full rounded px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+					on:click={() => {
+						showExportMenu = false;
+						onExportHtml();
+					}}
+				>
+					HTML로 내보내기
+				</button>
+				<button
+					class="w-full rounded px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+					on:click={() => {
+						showExportMenu = false;
+						onExportPdf();
+					}}
+				>
+					PDF로 내보내기
+				</button>
+			</div>
+		{/if}
+	</div>
 	<button
 		class="inline-flex h-8 w-8 items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
 		on:click={onSave}
@@ -169,14 +224,6 @@
 	>
 		<Save class="h-4 w-4" />
 	</button>
-	<!-- <button
-		class="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors h-8 w-8 hover:bg-accent hover:text-accent-foreground"
-		on:click={onExportPdf}
-		data-tooltip="PDF 내보내기"
-		data-tooltip-position="left"
-	>
-		<FileDown class="w-4 h-4" />
-	</button> -->
 	<button
 		class="inline-flex h-8 w-8 items-center justify-center rounded-md text-sm font-medium transition-colors {hasSlides
 			? 'hover:bg-accent hover:text-accent-foreground'

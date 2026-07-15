@@ -161,6 +161,21 @@ export async function savePdfFile(defaultName: string): Promise<string | null> {
 }
 
 /**
+ * HTML 파일 저장 다이얼로그
+ */
+export async function saveHtmlFile(defaultName: string): Promise<string | null> {
+	return (await save({
+		defaultPath: defaultName,
+		filters: [
+			{
+				name: 'HTML',
+				extensions: ['html']
+			}
+		]
+	})) as string | null;
+}
+
+/**
  * 파일 삭제
  */
 export async function deleteFile(path: string): Promise<void> {

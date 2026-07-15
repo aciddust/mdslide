@@ -1,7 +1,8 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { readFile } from '@tauri-apps/plugin-fs';
+import { readFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import { splitIntoSlides } from './markdownService';
+import { saveHtmlFile } from './fileService';
 
 export type ReadBinaryFn = (path: string) => Promise<Uint8Array>;
 
@@ -197,4 +198,26 @@ ${sections}
 <script>${VIEWER_JS}</script>
 </body>
 </html>`;
+}
+
+export interface ExportOutcome {
+	saved: boolean;
+	failedImages: string[];
+}
+
+/**
+ * standalone HTML로 내보내기. 저장 취소 시 { saved: false }
+ */
+export async function exportToHtml(markdown: string, filePath: string): Promise<ExportOutcome> {
+	const fileName = filePath.substring(filePath.lastIndexOf('/') + 1);
+	const baseName = fileName.includes('.')
+		? fileName.substring(0, fileName.lastIndexOf('.'))
+		: fileName;
+
+	const savePath = await saveHtmlFile(`${baseName}.html`);
+	if (!savePath) return { saved: false, failedImages: [] };
+
+	const { slidesHtml, failedImages } = await renderSlidesForExport(markdown, filePath);
+	await writeTextFile(savePath, buildViewerHtml(slidesHtml, baseName));
+	return { saved: true, failedImages };
 }

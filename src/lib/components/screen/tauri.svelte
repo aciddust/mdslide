@@ -9,6 +9,7 @@
 	import * as fileService from '$lib/services/fileService';
 	import * as markdownService from '$lib/services/markdownService';
 	import * as configService from '$lib/services/configService';
+	import * as exportService from '$lib/services/exportService';
 	import * as utils from '$lib/services/utils';
 	import type { FileNode } from '$lib/services/fileService';
 	import type { AppConfig } from '$lib/services/configService';
@@ -489,7 +490,9 @@
 
 		// 슬라이드 구분자 삽입
 		const newText =
-			markdownContent.substring(0, cursorPos) + slideDelimiter + markdownContent.substring(cursorPos);
+			markdownContent.substring(0, cursorPos) +
+			slideDelimiter +
+			markdownContent.substring(cursorPos);
 		markdownContent = newText;
 
 		// 포커스 복구 및 커서를 구분자 뒤로 이동
@@ -1302,6 +1305,26 @@
 
 	// CSS 스타일 정화 함수 제거 (printStyles로 대체하므로 불필요)
 
+	// HTML로 내보내기
+	async function handleExportHtml() {
+		if (isExporting || !currentFilePath) return;
+		isExporting = true;
+		try {
+			const result = await exportService.exportToHtml(markdownContent, currentFilePath);
+			if (result.saved) {
+				if (result.failedImages.length > 0) {
+					showWarning(`이미지 ${result.failedImages.length}개를 임베드하지 못했습니다.`);
+				}
+				showSuccess('HTML 파일로 내보냈습니다.');
+			}
+		} catch (error) {
+			console.error('HTML 내보내기 실패:', error);
+			showError('HTML 내보내기 중 오류가 발생했습니다.');
+		} finally {
+			isExporting = false;
+		}
+	}
+
 	// PDF 내보내기 (html2pdf 사용)
 	async function exportToPdf() {
 		try {
@@ -1437,6 +1460,7 @@
 					onTableGridHover={handleTableGridHover}
 					onTableGridClick={() => insertTable(tableRows, tableCols)}
 					onSave={() => saveFile(true)}
+					onExportHtml={handleExportHtml}
 					onExportPdf={exportToPdf}
 					onSlideshowToggle={togglePresentation}
 					onPreviewToggle={togglePreview}
