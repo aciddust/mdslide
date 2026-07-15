@@ -3,7 +3,6 @@
 	import { getCurrentWindow } from '@tauri-apps/api/window';
 	import { toast } from 'svelte-sonner';
 	import { homeDir } from '@tauri-apps/api/path';
-	import { writeFile } from '@tauri-apps/plugin-fs';
 
 	// 서비스 import
 	import * as fileService from '$lib/services/fileService';
@@ -1223,88 +1222,6 @@
 	// PDF 내보내기 상태
 	let isExporting = false;
 
-	// PDF 내보내기 (html2pdf 사용)
-	// PDF 전용 스타일 (Tailwind나 외부 CSS 의존성 없이 독립적으로 렌더링하기 위함)
-	const printStyles = `
-		/* 레이아웃 초기화 */
-		body, html { margin: 0; padding: 0; background: white; width: 100%; height: 100%; }
-		* { box-sizing: border-box; }
-		
-		/* 인쇄 컨테이너 -- 보여주기용 */
-		.print-container {
-			display: block !important;
-			position: absolute !important;
-			top: 0 !important;
-			left: 0 !important;
-			width: 100% !important;
-			background: white !important;
-			z-index: 99999 !important;
-		}
-
-		/* 슬라이드 페이지 스타일 */
-		.print-slide {
-			page-break-after: always;
-			height: 100vh; /* PDF 페이지 높이 */
-			display: flex;
-			flex-direction: column;
-			justify-content: center;
-			align-items: center;
-			padding: 40px; /* 여백 */
-			font-family: 'JetBrains Mono', monospace, sans-serif;
-			font-size: 16pt;
-			line-height: 1.6;
-			background: white;
-			color: black !important; /* 강제 검정색 */
-			border: none;
-		}
-
-		.print-slide:last-child {
-			page-break-after: auto;
-		}
-
-		/* 마크다운 태그 기본 스타일 */
-		.print-slide h1 { font-size: 3em; font-weight: bold; margin-bottom: 0.6em; color: black; }
-		.print-slide h2 { font-size: 2.4em; font-weight: bold; margin-bottom: 0.6em; color: black; }
-		.print-slide h3 { font-size: 1.8em; font-weight: bold; margin-bottom: 0.5em; color: black; }
-		.print-slide h4 { font-size: 1.5em; font-weight: bold; margin-bottom: 0.5em; color: black; }
-		.print-slide p { margin-bottom: 1em; width: 100%; color: #333; }
-		.print-slide ul, .print-slide ol { margin-bottom: 1em; padding-left: 2em; width: 100%; color: #333; }
-		.print-slide ul { list-style-type: disc; }
-		.print-slide ol { list-style-type: decimal; }
-		.print-slide img { max-width: 100%; max-height: 80vh; object-fit: contain; margin: 1em 0; }
-		.print-slide pre { 
-			background-color: #f5f5f5; 
-			padding: 1.5em; 
-			border-radius: 8px; 
-			width: 100%; 
-			white-space: pre-wrap;
-			border: 1px solid #ddd;
-			margin-bottom: 1em;
-		}
-		.print-slide code { 
-			font-family: 'JetBrains Mono', monospace; 
-			background-color: #f5f5f5;
-			padding: 0.2em 0.4em;
-			border-radius: 3px;
-		}
-		.print-slide pre code {
-			background-color: transparent;
-			padding: 0;
-		}
-		.print-slide blockquote { 
-			border-left: 5px solid #ccc; 
-			padding-left: 1em; 
-			margin-left: 0;
-			color: #555; 
-			width: 100%; 
-		}
-		.print-slide table { border-collapse: collapse; width: 100%; margin-bottom: 1em; }
-		.print-slide th, .print-slide td { border: 1px solid #000; padding: 10px; text-align: left; }
-		.print-slide th { background-color: #f0f0f0; font-weight: bold; }
-	`;
-
-	// CSS 스타일 정화 함수 제거 (printStyles로 대체하므로 불필요)
-
 	// HTML로 내보내기
 	async function handleExportHtml() {
 		if (isExporting || !currentFilePath) return;
@@ -1325,63 +1242,23 @@
 		}
 	}
 
-	// PDF 내보내기 (html2pdf 사용)
-	async function exportToPdf() {
+	// PDF로 내보내기
+	async function handleExportPdf() {
+		if (isExporting || !currentFilePath) return;
+		isExporting = true;
 		try {
-			// Dynamic import to avoid SSR issues
-			const html2pdf = (await import('html2pdf.js')).default;
-
-			const element = document.querySelector('.print-container') as HTMLElement;
-			if (!element) {
-				throw new Error('Print container not found');
+			const result = await exportService.exportToPdf(markdownContent, currentFilePath);
+			if (result.saved) {
+				if (result.failedImages.length > 0) {
+					showWarning(`이미지 ${result.failedImages.length}개를 임베드하지 못했습니다.`);
+				}
+				if (result.overflowSlides.length > 0) {
+					showWarning(`슬라이드 ${result.overflowSlides.join(', ')}번의 내용이 페이지를 넘어 잘렸습니다.`);
+				}
+				showSuccess('PDF가 저장되었습니다.');
 			}
-
-			// 저장 경로 선택
-			const fileName = currentFilePath
-				? utils.getFileNameWithoutExtension(currentFilePath)
-				: 'slides';
-			const defaultName = `${fileName}.pdf`;
-			const savePath = await fileService.savePdfFile(defaultName);
-
-			// 사용자가 취소한 경우
-			if (!savePath) return;
-
-			isExporting = true;
-			// DOM 업데이트 대기
-			await new Promise((resolve) => setTimeout(resolve, 100));
-
-			const opt = {
-				margin: 0,
-				filename: defaultName,
-				image: { type: 'jpeg' as const, quality: 0.98 },
-				html2canvas: {
-					scale: 2,
-					useCORS: true,
-					logging: false,
-					// 중요: 윈도우 너비를 설정하여 반응형 레이아웃 이슈 방지
-					windowWidth: 1280,
-					onclone: (doc: Document) => {
-						// 1. 기존 스타일시트 모두 제거 (oklch 오류 및 스타일 충돌 방지)
-						const links = doc.querySelectorAll('link[rel="stylesheet"], style');
-						links.forEach((link) => link.remove());
-
-						// 2. 안전한 PDF 전용 스타일 주입
-						const styleFn = doc.createElement('style');
-						styleFn.innerHTML = printStyles;
-						doc.head.appendChild(styleFn);
-					}
-				},
-				jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'landscape' as const },
-				pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-			};
-
-			const pdfBuffer = await html2pdf().set(opt).from(element).output('arraybuffer');
-			const pdfArray = new Uint8Array(pdfBuffer as ArrayBuffer);
-			await writeFile(savePath, pdfArray);
-
-			showSuccess('PDF가 저장되었습니다.');
-		} catch (e) {
-			console.error('PDF 내보내기 실패:', e);
+		} catch (error) {
+			console.error('PDF 내보내기 실패:', error);
 			showError('PDF 생성 중 오류가 발생했습니다.');
 		} finally {
 			isExporting = false;
@@ -1461,7 +1338,7 @@
 					onTableGridClick={() => insertTable(tableRows, tableCols)}
 					onSave={() => saveFile(true)}
 					onExportHtml={handleExportHtml}
-					onExportPdf={exportToPdf}
+					onExportPdf={handleExportPdf}
 					onSlideshowToggle={togglePresentation}
 					onPreviewToggle={togglePreview}
 					{showPreview}
@@ -1536,15 +1413,6 @@
 	onNewDirConfirm={createNewDirectory}
 />
 
-<!-- 인쇄용 히든 컨테이너 -->
-<div class="print-container {isExporting ? 'exporting' : 'hidden'}">
-	{#each slides as slide}
-		<div class="print-slide">
-			{@html renderMarkdown(slide)}
-		</div>
-	{/each}
-</div>
-
 <style>
 	:global(.line-clamp-2) {
 		display: -webkit-box;
@@ -1552,143 +1420,5 @@
 		line-clamp: 2;
 		-webkit-box-orient: vertical;
 		overflow: hidden;
-	}
-
-	/* 인쇄 및 PDF 공통 스타일 */
-	.print-slide {
-		page-break-after: always;
-		height: 100vh;
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		align-items: center;
-		padding: 2rem;
-		font-family: var(--font-family, 'JetBrains Mono');
-		/* 슬라이드 내용 스타일링 */
-		font-size: 1.2rem;
-		line-height: 1.6;
-		background: white;
-		color: black;
-	}
-
-	/* 마지막 슬라이드는 페이지 넘김 없음 */
-	.print-slide:last-child {
-		page-break-after: auto;
-	}
-
-	/* 마크다운 스타일링 (SlideshowMode와 유사하게) */
-	:global(.print-slide h1) {
-		font-size: 2.5em;
-		font-weight: bold;
-		margin-bottom: 0.5em;
-	}
-	:global(.print-slide h2) {
-		font-size: 2em;
-		font-weight: bold;
-		margin-bottom: 0.5em;
-	}
-	:global(.print-slide h3) {
-		font-size: 1.75em;
-		font-weight: bold;
-		margin-bottom: 0.5em;
-	}
-	:global(.print-slide h4) {
-		font-size: 1.5em;
-		font-weight: bold;
-		margin-bottom: 0.5em;
-	}
-	:global(.print-slide p) {
-		margin-bottom: 1em;
-		width: 100%;
-	}
-	:global(.print-slide ul),
-	:global(.print-slide ol) {
-		margin-bottom: 1em;
-		padding-left: 2em;
-		width: 100%;
-	}
-	:global(.print-slide ul) {
-		list-style-type: disc;
-	}
-	:global(.print-slide ol) {
-		list-style-type: decimal;
-	}
-	:global(.print-slide img) {
-		max-width: 100%;
-		max-height: 80vh;
-		object-fit: contain;
-	}
-	:global(.print-slide pre) {
-		background-color: #f5f5f5;
-		padding: 1em;
-		border-radius: 4px;
-		overflow-x: auto;
-		width: 100%;
-	}
-	:global(.print-slide code) {
-		font-family: 'JetBrains Mono', monospace;
-	}
-	:global(.print-slide blockquote) {
-		border-left: 4px solid #ccc;
-		padding-left: 1em;
-		color: #666;
-		width: 100%;
-	}
-	:global(.print-slide table) {
-		border-collapse: collapse;
-		width: 100%;
-		margin-bottom: 1em;
-	}
-	:global(.print-slide th),
-	:global(.print-slide td) {
-		border: 1px solid #ddd;
-		padding: 8px;
-		text-align: left;
-	}
-	:global(.print-slide th) {
-		background-color: #f2f2f2;
-	}
-
-	/* PDF 내보내기 모드 */
-	.print-container.exporting {
-		display: block !important;
-		position: fixed;
-		left: 0;
-		top: 0;
-		width: 100%;
-		height: 100%;
-		z-index: 9999;
-		background: white;
-		overflow-y: auto;
-	}
-
-	@media print {
-		/* 모든 UI 숨기기 */
-		:global(body > *) {
-			display: none !important;
-		}
-
-		/* 인쇄용 컨테이너 보이기 */
-		.print-container {
-			display: block !important;
-			position: absolute;
-			left: 0;
-			top: 0;
-			width: 100%;
-		}
-	}
-
-	/* html2canvas가 oklch 색상 함수를 지원하지 않으므로, 인쇄 영역 내에서는 기본 색상을 sRGB로 강제 설정 */
-	/* PDF 내보내기 시 적용될 스타일 */
-	.print-container {
-		color: black;
-		background: white;
-		/* oklch 변수를 sRGB로 오버라이드 (필요한 경우) */
-		--background: white;
-		--foreground: black;
-		--primary: #5200cc;
-		--secondary: #0088cc;
-		--muted: #f5f5f5;
-		--border: #ddd;
 	}
 </style>

@@ -1,8 +1,9 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { readFile, writeTextFile } from '@tauri-apps/plugin-fs';
+import { readFile, writeTextFile, writeFile } from '@tauri-apps/plugin-fs';
 import { splitIntoSlides } from './markdownService';
-import { saveHtmlFile } from './fileService';
+import { saveHtmlFile, savePdfFile } from './fileService';
+import { getFileName, getFileNameWithoutExtension } from './utils';
 
 export type ReadBinaryFn = (path: string) => Promise<Uint8Array>;
 
@@ -220,4 +221,92 @@ export async function exportToHtml(markdown: string, filePath: string): Promise<
 	const { slidesHtml, failedImages } = await renderSlidesForExport(markdown, filePath);
 	await writeTextFile(savePath, buildViewerHtml(slidesHtml, baseName));
 	return { saved: true, failedImages };
+}
+
+// html2canvas가 oklch를 지원하지 않으므로 onclone에서 앱 스타일을 제거하고 이것만 주입한다
+const PDF_STYLES = `
+	* { margin: 0; padding: 0; box-sizing: border-box; }
+	.pdf-slide { width: 1280px; height: 720px; overflow: hidden; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 48px 80px; background: #fff; color: #000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; font-size: 20px; line-height: 1.7; page-break-after: always; }
+	.pdf-slide:last-child { page-break-after: auto; }
+	.pdf-slide h1 { font-size: 2.2em; font-weight: 700; margin-bottom: .5em; }
+	.pdf-slide h2 { font-size: 1.8em; font-weight: 700; margin-bottom: .5em; }
+	.pdf-slide h3 { font-size: 1.5em; font-weight: 700; margin-bottom: .5em; }
+	.pdf-slide h4 { font-size: 1.25em; font-weight: 700; margin-bottom: .5em; }
+	.pdf-slide p { margin-bottom: 1em; width: 100%; }
+	.pdf-slide ul, .pdf-slide ol { margin-bottom: 1em; padding-left: 1.6em; width: 100%; }
+	.pdf-slide blockquote { border-left: 4px solid #ccc; padding-left: 1em; color: #666; width: 100%; }
+	.pdf-slide pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; width: 100%; }
+	.pdf-slide code { font-family: ui-monospace, Menlo, monospace; font-size: .9em; }
+	.pdf-slide table { border-collapse: collapse; width: 100%; margin-bottom: 1em; }
+	.pdf-slide th, .pdf-slide td { border: 1px solid #000; padding: 8px 12px; text-align: left; }
+	.pdf-slide th { background: #f0f0f0; font-weight: 700; }
+	.pdf-slide img { max-width: 100%; max-height: 480px; object-fit: contain; }
+`;
+
+/**
+ * 16:9 PDF로 내보내기 (슬라이드당 1페이지, 넘치는 콘텐츠는 잘림).
+ * 저장 취소 시 { saved: false }
+ */
+export async function exportToPdf(
+	markdown: string,
+	filePath: string
+): Promise<{ saved: boolean; failedImages: string[]; overflowSlides: number[] }> {
+	const baseName = getFileNameWithoutExtension(getFileName(filePath));
+
+	const savePath = await savePdfFile(`${baseName}.pdf`);
+	if (!savePath) return { saved: false, failedImages: [], overflowSlides: [] };
+
+	const { slidesHtml, failedImages } = await renderSlidesForExport(markdown, filePath);
+
+	// 오프스크린 렌더 컨테이너 (화면 밖 배치 — 레이아웃은 계산되지만 보이지 않음)
+	const container = document.createElement('div');
+	container.style.cssText = 'position: fixed; left: 0; top: 0; z-index: -1000; opacity: 0; pointer-events: none;';
+	const style = document.createElement('style');
+	style.textContent = PDF_STYLES;
+	container.appendChild(style);
+
+	const overflowSlides: number[] = [];
+	for (const html of slidesHtml) {
+		const slide = document.createElement('div');
+		slide.className = 'pdf-slide';
+		slide.innerHTML = html;
+		container.appendChild(slide);
+	}
+	document.body.appendChild(container);
+
+	try {
+		// 이미지 로드 대기 (base64라 즉시지만 디코드 시간 확보)
+		await new Promise((resolve) => setTimeout(resolve, 100));
+
+		// 넘침 감지
+		container.querySelectorAll('.pdf-slide').forEach((el, i) => {
+			if (el.scrollHeight > el.clientHeight) overflowSlides.push(i + 1);
+		});
+
+		const html2pdf = (await import('html2pdf.js')).default;
+		const opt = {
+			margin: 0,
+			image: { type: 'jpeg' as const, quality: 0.98 },
+			html2canvas: {
+				scale: 2,
+				useCORS: true,
+				logging: false,
+				windowWidth: 1280,
+				onclone: (doc: Document) => {
+					doc.querySelectorAll('link[rel="stylesheet"], style').forEach((el) => el.remove());
+					const s = doc.createElement('style');
+					s.textContent = PDF_STYLES;
+					doc.head.appendChild(s);
+				}
+			},
+			jsPDF: { unit: 'mm' as const, format: [254, 142.875] as [number, number], orientation: 'landscape' as const },
+			pagebreak: { mode: ['css', 'legacy'] }
+		};
+
+		const pdfBuffer = await html2pdf().set(opt).from(container).output('arraybuffer');
+		await writeFile(savePath, new Uint8Array(pdfBuffer as ArrayBuffer));
+		return { saved: true, failedImages, overflowSlides };
+	} finally {
+		container.remove();
+	}
 }
