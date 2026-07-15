@@ -250,22 +250,11 @@ const PDF_STYLES = `
 `;
 
 /**
- * 16:9 PDF로 내보내기 (슬라이드당 1페이지, 넘치는 콘텐츠는 잘림).
- * 저장 취소 시 { saved: false }
+ * 슬라이드 HTML 배열을 PDF 바이트로 렌더 (다이얼로그/파일 IO 없음 — 검증 하네스에서도 사용)
  */
-export async function exportToPdf(
-	markdown: string,
-	filePath: string
-): Promise<{ saved: boolean; failedImages: string[]; overflowSlides: number[] }> {
-	const baseName = getFileNameWithoutExtension(
-		filePath.substring(lastSeparatorIndex(filePath) + 1)
-	);
-
-	const savePath = await savePdfFile(`${baseName}.pdf`);
-	if (!savePath) return { saved: false, failedImages: [], overflowSlides: [] };
-
-	const { slidesHtml, failedImages } = await renderSlidesForExport(markdown, filePath);
-
+export async function generatePdfBytes(
+	slidesHtml: string[]
+): Promise<{ bytes: Uint8Array; overflowSlides: number[] }> {
 	// 오프스크린 렌더 컨테이너 (화면 밖 배치 — 레이아웃은 계산되지만 보이지 않음)
 	const container = document.createElement('div');
 	container.style.cssText =
@@ -322,9 +311,29 @@ export async function exportToPdf(
 		};
 
 		const pdfBuffer = await html2pdf().set(opt).from(container).output('arraybuffer');
-		await writeFile(savePath, new Uint8Array(pdfBuffer as ArrayBuffer));
-		return { saved: true, failedImages, overflowSlides };
+		return { bytes: new Uint8Array(pdfBuffer as ArrayBuffer), overflowSlides };
 	} finally {
 		container.remove();
 	}
+}
+
+/**
+ * 16:9 PDF로 내보내기 (슬라이드당 1페이지, 넘치는 콘텐츠는 잘림).
+ * 저장 취소 시 { saved: false }
+ */
+export async function exportToPdf(
+	markdown: string,
+	filePath: string
+): Promise<{ saved: boolean; failedImages: string[]; overflowSlides: number[] }> {
+	const baseName = getFileNameWithoutExtension(
+		filePath.substring(lastSeparatorIndex(filePath) + 1)
+	);
+
+	const savePath = await savePdfFile(`${baseName}.pdf`);
+	if (!savePath) return { saved: false, failedImages: [], overflowSlides: [] };
+
+	const { slidesHtml, failedImages } = await renderSlidesForExport(markdown, filePath);
+	const { bytes, overflowSlides } = await generatePdfBytes(slidesHtml);
+	await writeFile(savePath, bytes);
+	return { saved: true, failedImages, overflowSlides };
 }
