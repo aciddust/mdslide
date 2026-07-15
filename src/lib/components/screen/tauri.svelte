@@ -1242,29 +1242,6 @@
 		}
 	}
 
-	// PDF로 내보내기
-	async function handleExportPdf() {
-		if (isExporting || !currentFilePath) return;
-		isExporting = true;
-		try {
-			const result = await exportService.exportToPdf(markdownContent, currentFilePath);
-			if (result.saved) {
-				if (result.failedImages.length > 0) {
-					showWarning(`이미지 ${result.failedImages.length}개를 임베드하지 못했습니다.`);
-				}
-				if (result.overflowSlides.length > 0) {
-					showWarning(`슬라이드 ${result.overflowSlides.join(', ')}번의 내용이 페이지를 넘어 잘렸습니다.`);
-				}
-				showSuccess('PDF가 저장되었습니다.');
-			}
-		} catch (error) {
-			console.error('PDF 내보내기 실패:', error);
-			showError('PDF 생성 중 오류가 발생했습니다.');
-		} finally {
-			isExporting = false;
-		}
-	}
-
 	// 컴포넌트 마운트 시
 	onMount(() => {
 		initWorkspace();
@@ -1338,7 +1315,6 @@
 					onTableGridClick={() => insertTable(tableRows, tableCols)}
 					onSave={() => saveFile(true)}
 					onExportHtml={handleExportHtml}
-					onExportPdf={handleExportPdf}
 					onSlideshowToggle={togglePresentation}
 					onPreviewToggle={togglePreview}
 					{showPreview}

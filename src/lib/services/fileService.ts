@@ -146,21 +146,6 @@ export async function selectImageFile(): Promise<string | null> {
 }
 
 /**
- * PDF 파일 저장 다이얼로그
- */
-export async function savePdfFile(defaultName: string): Promise<string | null> {
-	return (await save({
-		defaultPath: defaultName,
-		filters: [
-			{
-				name: 'PDF',
-				extensions: ['pdf']
-			}
-		]
-	})) as string | null;
-}
-
-/**
  * HTML 파일 저장 다이얼로그
  */
 export async function saveHtmlFile(defaultName: string): Promise<string | null> {
