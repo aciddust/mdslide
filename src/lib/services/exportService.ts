@@ -260,7 +260,8 @@ export async function exportToPdf(
 
 	// 오프스크린 렌더 컨테이너 (화면 밖 배치 — 레이아웃은 계산되지만 보이지 않음)
 	const container = document.createElement('div');
-	container.style.cssText = 'position: fixed; left: 0; top: 0; z-index: -1000; opacity: 0; pointer-events: none;';
+	container.style.cssText =
+		'position: fixed; left: 0; top: 0; z-index: -1000; opacity: 0; pointer-events: none;';
 	const style = document.createElement('style');
 	style.textContent = PDF_STYLES;
 	container.appendChild(style);
@@ -275,8 +276,10 @@ export async function exportToPdf(
 	document.body.appendChild(container);
 
 	try {
-		// 이미지 로드 대기 (base64라 즉시지만 디코드 시간 확보)
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		// 이미지 디코드 완료 대기 (대용량 base64 이미지가 빈 이미지로 캡처되지 않도록)
+		await Promise.all(
+			Array.from(container.querySelectorAll('img')).map((img) => img.decode().catch(() => {}))
+		);
 
 		// 넘침 감지
 		container.querySelectorAll('.pdf-slide').forEach((el, i) => {
@@ -299,7 +302,11 @@ export async function exportToPdf(
 					doc.head.appendChild(s);
 				}
 			},
-			jsPDF: { unit: 'mm' as const, format: [254, 142.875] as [number, number], orientation: 'landscape' as const },
+			jsPDF: {
+				unit: 'mm' as const,
+				format: [254, 142.875] as [number, number],
+				orientation: 'landscape' as const
+			},
 			pagebreak: { mode: ['css', 'legacy'] }
 		};
 
