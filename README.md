@@ -33,6 +33,11 @@ A desktop app for quickly creating slideshows using Markdown.
 - Keyboard navigation (arrow keys, spacebar)
 - Slide preview
 
+### Export
+
+- Standalone HTML export — single self-contained file, opens as a slideshow viewer in any browser (images embedded)
+- PDF export — 16:9 pages, one slide per page
+
 ### Shortcuts
 
 - `⌘/Ctrl + N`: New file
