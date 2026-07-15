@@ -5,6 +5,7 @@
 	"identifier": "net.d3fau1t.mdslide",
 	"build": {
 		"frontendDist": "../build",
+		"devUrl": "http://localhost:5173",
 		"beforeDevCommand": "npm run dev",
 		"beforeBuildCommand": "npm run build"
 	},
