@@ -1,7 +1,7 @@
 <!-- src/routes/test-export/+page.svelte -->
 <script lang="ts">
 	// TEMP: exportService 검증용 임시 라우트 (Task 5에서 삭제)
-	import { renderSlidesForExport } from '$lib/services/exportService';
+	import { renderSlidesForExport, buildViewerHtml } from '$lib/services/exportService';
 
 	const SAMPLE_MD = [
 		'# Slide 1\n\n![logo](images/logo.png)\n\n![remote](https://example.com/r.png)',
@@ -20,6 +20,13 @@
 				throw new Error('not found: ' + path);
 			};
 			return await renderSlidesForExport(SAMPLE_MD, '/fake/dir/deck.md', mockRead);
+		};
+
+		(window as any).__buildViewer = async () => {
+			const tall = Array.from({ length: 60 }, (_, i) => `- line ${i + 1}`).join('\n');
+			const md = `# Tall 1\n\n${tall}\n---\n# Tall 2\n\n${tall}\n---\n# Short`;
+			const { slidesHtml } = await renderSlidesForExport(md, null);
+			return buildViewerHtml(slidesHtml, 'My <Deck> & Co');
 		};
 	}
 </script>
